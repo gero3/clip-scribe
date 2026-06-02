@@ -149,6 +149,11 @@ const transcribeFile = async (file: File, duration: number, modelId: string, lan
       throwIfCanceled();
       const wavBytes = await ffmpeg.readFile(chunkName);
       const audio = decodeWavToFloat32(wavBytes);
+      const audioStats = analyzeAudio(audio);
+
+      if (audioStats.samples === 0) {
+        throw new Error(`Extracted chunk ${chunkIndex + 1} contains no audio samples.`);
+      }
 
       self.postMessage({
         type: 'status',
@@ -387,6 +392,23 @@ const decodeWavToFloat32 = (input: Uint8Array | string) => {
   }
 
   return audio;
+};
+
+const analyzeAudio = (audio: Float32Array) => {
+  let peak = 0;
+  let sumSquares = 0;
+
+  for (const sample of audio) {
+    const absolute = Math.abs(sample);
+    peak = Math.max(peak, absolute);
+    sumSquares += sample * sample;
+  }
+
+  return {
+    peak,
+    rms: audio.length > 0 ? Math.sqrt(sumSquares / audio.length) : 0,
+    samples: audio.length
+  };
 };
 
 const readAscii = (view: DataView, offset: number, length: number) => {
