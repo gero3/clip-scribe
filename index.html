@@ -24,6 +24,38 @@
         </label>
         <p id="file-name" class="muted">No file selected</p>
 
+        <label class="field">
+          <span>Whisper model</span>
+          <select id="model-select">
+            <optgroup label="Multilingual">
+              <option value="Xenova/whisper-tiny">Tiny multilingual - fastest</option>
+              <option value="Xenova/whisper-base" selected>Base multilingual - better</option>
+              <option value="Xenova/whisper-small">Small multilingual - heavier</option>
+            </optgroup>
+            <optgroup label="English only">
+              <option value="Xenova/whisper-tiny.en">Tiny English - fastest</option>
+              <option value="Xenova/whisper-base.en">Base English - better</option>
+              <option value="Xenova/whisper-small.en">Small English - heavier</option>
+            </optgroup>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Language</span>
+          <select id="language-select">
+            <option value="auto" selected>Auto-detect</option>
+            <option value="english">English</option>
+            <option value="dutch">Dutch</option>
+            <option value="french">French</option>
+            <option value="german">German</option>
+            <option value="spanish">Spanish</option>
+            <option value="italian">Italian</option>
+            <option value="portuguese">Portuguese</option>
+            <option value="polish">Polish</option>
+            <option value="ukrainian">Ukrainian</option>
+          </select>
+        </label>
+
         <div class="actions">
           <button id="start-button" type="button" disabled>Start transcription</button>
           <button id="cancel-button" type="button" disabled>Cancel</button>
@@ -52,8 +84,8 @@
           <li>Choose an MP4 and click <strong>Start transcription</strong>.</li>
         </ol>
         <p>
-          The first run downloads the ffmpeg.wasm core and the
-          <code>Xenova/whisper-tiny.en</code> model into the browser cache.
+          The first run downloads the ffmpeg.wasm core and the selected Whisper model into the
+          browser cache.
         </p>
       </section>
     </main>

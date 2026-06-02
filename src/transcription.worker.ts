@@ -6,6 +6,8 @@ type StartMessage = {
   type: 'start';
   file: File;
   duration: number;
+  modelId: string;
+  language: string;
 };
 
 type CancelMessage = {
@@ -16,10 +18,7 @@ type MainMessage = StartMessage | CancelMessage;
 
 type AutomaticSpeechRecognitionPipeline = (
   audio: Float32Array,
-  options?: {
-    language: string;
-    task: string;
-  }
+  options?: Record<string, unknown>
 ) => Promise<unknown>;
 
 type CreatePipeline = (
@@ -34,11 +33,32 @@ const CHUNK_SECONDS = 30;
 const OVERLAP_SECONDS = 5;
 const STEP_SECONDS = CHUNK_SECONDS - OVERLAP_SECONDS;
 const INPUT_NAME = 'input.mp4';
-const MODEL_ID = 'Xenova/whisper-tiny.en';
+const DEFAULT_MODEL_ID = 'Xenova/whisper-base';
+const ALLOWED_MODEL_IDS = new Set([
+  'Xenova/whisper-tiny',
+  'Xenova/whisper-base',
+  'Xenova/whisper-small',
+  'Xenova/whisper-tiny.en',
+  'Xenova/whisper-base.en',
+  'Xenova/whisper-small.en'
+]);
+const ALLOWED_LANGUAGES = new Set([
+  'auto',
+  'english',
+  'dutch',
+  'french',
+  'german',
+  'spanish',
+  'italian',
+  'portuguese',
+  'polish',
+  'ukrainian'
+]);
 
 const ffmpeg = new FFmpeg();
 let ffmpegLoaded = false;
 let transcriber: AutomaticSpeechRecognitionPipeline | null = null;
+let transcriberModelId = '';
 let canceled = false;
 let busy = false;
 
@@ -67,7 +87,12 @@ self.addEventListener('message', async (event: MessageEvent<MainMessage>) => {
   canceled = false;
 
   try {
-    await transcribeFile(message.file, message.duration);
+    await transcribeFile(
+      message.file,
+      message.duration,
+      safeModelId(message.modelId),
+      safeLanguage(message.language)
+    );
     self.postMessage({ type: canceled ? 'canceled' : 'done' });
   } catch (error) {
     if (canceled) {
@@ -81,9 +106,9 @@ self.addEventListener('message', async (event: MessageEvent<MainMessage>) => {
   }
 });
 
-const transcribeFile = async (file: File, duration: number) => {
+const transcribeFile = async (file: File, duration: number, modelId: string, language: string) => {
   await ensureFFmpegLoaded();
-  await ensureTranscriberLoaded();
+  await ensureTranscriberLoaded(modelId);
 
   self.postMessage({ type: 'status', message: 'Writing MP4 into ffmpeg.wasm memory...' });
   await safeDelete(INPUT_NAME);
@@ -126,7 +151,7 @@ const transcribeFile = async (file: File, duration: number) => {
         message: `Transcribing chunk ${chunkIndex + 1} of ${chunkStarts.length}...`
       });
 
-      const result = await transcribeAudio(audio);
+      const result = await transcribeAudio(audio, modelId, language);
       throwIfCanceled();
 
       self.postMessage({
@@ -164,16 +189,16 @@ const ensureFFmpegLoaded = async () => {
   ffmpegLoaded = true;
 };
 
-const ensureTranscriberLoaded = async () => {
-  if (transcriber) return;
+const ensureTranscriberLoaded = async (modelId: string) => {
+  if (transcriber && transcriberModelId === modelId) return;
 
   self.postMessage({
     type: 'status',
-    message: `Loading Whisper model ${MODEL_ID}...`
+    message: `Loading Whisper model ${modelId}...`
   });
 
   const createPipeline = pipeline as unknown as CreatePipeline;
-  transcriber = await createPipeline('automatic-speech-recognition', MODEL_ID, {
+  transcriber = await createPipeline('automatic-speech-recognition', modelId, {
     progress_callback: (progress: unknown) => {
       if (
         progress &&
@@ -189,6 +214,7 @@ const ensureTranscriberLoaded = async () => {
       }
     }
   });
+  transcriberModelId = modelId;
 };
 
 const buildChunkStarts = (duration: number) => {
@@ -218,10 +244,11 @@ const extractChunk = async (start: number, outputName: string) => {
   ]);
 };
 
-const transcribeAudio = async (audio: Float32Array) => {
+const transcribeAudio = async (audio: Float32Array, modelId: string, language: string) => {
   if (!transcriber) throw new Error('Whisper model is not loaded.');
 
-  const output = await transcriber(audio);
+  const options = buildTranscriptionOptions(modelId, language);
+  const output = await transcriber(audio, options);
 
   if (Array.isArray(output)) {
     return output.map((item) => ('text' in item ? String(item.text) : '')).join(' ').trim();
@@ -310,6 +337,24 @@ const throwIfCanceled = () => {
 };
 
 const formatSeconds = (seconds: number) => `${seconds.toFixed(0)}s`;
+
+const safeModelId = (modelId: string) => (ALLOWED_MODEL_IDS.has(modelId) ? modelId : DEFAULT_MODEL_ID);
+
+const safeLanguage = (language: string) => (ALLOWED_LANGUAGES.has(language) ? language : 'auto');
+
+const buildTranscriptionOptions = (modelId: string, language: string) => {
+  if (modelId.endsWith('.en')) return undefined;
+
+  const options: Record<string, unknown> = {
+    task: 'transcribe'
+  };
+
+  if (language !== 'auto') {
+    options.language = language;
+  }
+
+  return options;
+};
 
 const errorMessage = (error: unknown) => {
   if (error instanceof Error) return error.message;

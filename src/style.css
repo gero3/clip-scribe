@@ -118,6 +118,29 @@ h2 {
   color: #637181;
 }
 
+.field {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.field span {
+  color: #334252;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+select {
+  appearance: none;
+  background: #ffffff;
+  border: 1px solid #c8d0d9;
+  border-radius: 6px;
+  color: #17202a;
+  font: inherit;
+  inline-size: min(100%, 360px);
+  padding: 0.7rem 0.9rem;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;

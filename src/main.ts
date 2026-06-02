@@ -47,6 +47,8 @@ type WorkerMessage =
   | WorkerCanceledMessage;
 
 const videoInput = document.querySelector<HTMLInputElement>('#video-input');
+const modelSelect = document.querySelector<HTMLSelectElement>('#model-select');
+const languageSelect = document.querySelector<HTMLSelectElement>('#language-select');
 const fileName = document.querySelector<HTMLParagraphElement>('#file-name');
 const startButton = document.querySelector<HTMLButtonElement>('#start-button');
 const cancelButton = document.querySelector<HTMLButtonElement>('#cancel-button');
@@ -58,6 +60,8 @@ const transcriptOutput = document.querySelector<HTMLPreElement>('#transcript');
 
 if (
   !videoInput ||
+  !modelSelect ||
+  !languageSelect ||
   !fileName ||
   !startButton ||
   !cancelButton ||
@@ -88,6 +92,8 @@ const setRunning = (running: boolean) => {
   startButton.disabled = running || !selectedFile;
   cancelButton.disabled = !running;
   videoInput.disabled = running;
+  modelSelect.disabled = running;
+  languageSelect.disabled = running;
 };
 
 const setTranscriptActions = () => {
@@ -117,7 +123,9 @@ startButton.addEventListener('click', () => {
   worker.postMessage({
     type: 'start',
     file: selectedFile,
-    duration: selectedDuration
+    duration: selectedDuration,
+    modelId: modelSelect.value,
+    language: languageSelect.value
   });
 });
 
@@ -250,9 +258,19 @@ const prepareSelectedFile = async () => {
 const loadLocalTestFile = async () => {
   const params = new URLSearchParams(window.location.search);
   const testFile = params.get('testFile');
+  const testModel = params.get('model');
+  const testLanguage = params.get('language');
   const isLocalhost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
 
   if (!testFile || !isLocalhost) return;
+
+  if (testModel && Array.from(modelSelect.options).some((option) => option.value === testModel)) {
+    modelSelect.value = testModel;
+  }
+
+  if (testLanguage && Array.from(languageSelect.options).some((option) => option.value === testLanguage)) {
+    languageSelect.value = testLanguage;
+  }
 
   setStatus('Loading local test MP4...');
   const response = await fetch(testFile);

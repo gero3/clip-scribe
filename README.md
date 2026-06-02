@@ -14,7 +14,9 @@ https://gero3.github.io/clip-scribe/
 
 - Upload an MP4 with a normal browser file input.
 - Extract 30-second audio chunks with 5-second overlap.
-- Transcribe chunks one by one with `Xenova/whisper-tiny.en`.
+- Choose between multilingual and English-only Whisper models.
+- Use `Xenova/whisper-base` by default, with tiny and small options available.
+- Auto-detect the language or pick a language such as English, Dutch, French, German, or Spanish.
 - Append text as each chunk finishes.
 - Copy the full transcript or download it as a `.txt` file.
 - Cancel an in-progress transcription.
@@ -24,7 +26,7 @@ https://gero3.github.io/clip-scribe/
 
 1. The user selects an MP4 file.
 2. The app reads the video duration from browser metadata.
-3. A Web Worker loads ffmpeg.wasm and the Whisper model.
+3. A Web Worker loads ffmpeg.wasm and the selected Whisper model.
 4. ffmpeg.wasm extracts each chunk with:
 
    ```text
@@ -89,7 +91,8 @@ The Vite config uses `base: './'`, so built assets work correctly from the `/cli
 
 ## Browser Notes
 
-- The first run downloads ffmpeg.wasm and the Whisper model into the browser cache.
+- The first run downloads ffmpeg.wasm and the selected Whisper model into the browser cache.
+- `base` is a better default than `tiny`, while `small` can be more accurate but is much heavier.
 - Large videos can take time and use significant memory.
 - Performance depends on the user's browser, CPU, and available memory.
 - Everything runs locally in the browser; there is no server-side transcription.
