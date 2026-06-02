@@ -1,17 +1,48 @@
-# Browser MP4 Transcriber
+# Clip Scribe
 
-A plain Vite TypeScript static web app that transcribes MP4 files entirely in the browser.
+Clip Scribe is a static web app for transcribing MP4 videos entirely in the browser.
 
-The app uses ffmpeg.wasm to extract 30-second mono 16 kHz WAV chunks with 5-second overlap, then transcribes each chunk with `Xenova/whisper-tiny.en` through Transformers.js. No backend is required.
+It uses ffmpeg.wasm to extract small audio chunks from the uploaded video, then runs Whisper through Transformers.js to turn those chunks into text. The MP4 never needs to be uploaded to a backend.
 
-## Local Setup
+Live site:
+
+```text
+https://gero3.github.io/clip-scribe/
+```
+
+## Features
+
+- Upload an MP4 with a normal browser file input.
+- Extract 30-second audio chunks with 5-second overlap.
+- Transcribe chunks one by one with `Xenova/whisper-tiny.en`.
+- Append text as each chunk finishes.
+- Copy the full transcript or download it as a `.txt` file.
+- Cancel an in-progress transcription.
+- Keep all processing client-side.
+
+## How It Works
+
+1. The user selects an MP4 file.
+2. The app reads the video duration from browser metadata.
+3. A Web Worker loads ffmpeg.wasm and the Whisper model.
+4. ffmpeg.wasm extracts each chunk with:
+
+   ```text
+   ffmpeg -ss START -t 30 -i input.mp4 -vn -ac 1 -ar 16000 chunk_N.wav
+   ```
+
+5. Each WAV chunk is decoded and passed to Whisper.
+6. The chunk transcript is sent back to the page.
+7. The chunk file is deleted from ffmpeg's in-memory filesystem.
+
+## Local Development
 
 ```powershell
 npm install
 npm run dev
 ```
 
-Open the local Vite URL, usually:
+Open the local Vite URL:
 
 ```text
 http://localhost:5173
@@ -24,7 +55,7 @@ $env:NODE_OPTIONS='--use-system-ca'
 npm install
 ```
 
-## Build
+## Production Build
 
 ```powershell
 npm run build
@@ -32,20 +63,33 @@ npm run build
 
 The static files are generated in `dist/`.
 
-## Deploy To GitHub Pages
+## GitHub Pages Deployment
 
-1. Create a GitHub repository and push this project.
-2. In GitHub, go to **Settings > Pages**.
-3. Under **Build and deployment**, set **Source** to **GitHub Actions**.
-4. Push to the `main` branch.
-5. The workflow in `.github/workflows/deploy.yml` builds the app and uploads `dist/` to GitHub Pages.
-
-The Vite config uses `base: './'`, so the built app works from a repository Pages URL like:
+This repository includes a GitHub Actions workflow at:
 
 ```text
-https://YOUR_USERNAME.github.io/YOUR_REPOSITORY/
+.github/workflows/deploy.yml
 ```
 
-## Notes
+To enable deployment:
 
-The first transcription downloads ffmpeg.wasm and the Whisper model into the browser cache. Large videos can take time and use significant memory because all processing happens client-side.
+1. Go to the repository on GitHub.
+2. Open **Settings > Pages**.
+3. Set **Source** to **GitHub Actions**.
+4. Push to the `main` branch.
+5. Wait for the deploy workflow to finish.
+
+The site is published at:
+
+```text
+https://gero3.github.io/clip-scribe/
+```
+
+The Vite config uses `base: './'`, so built assets work correctly from the `/clip-scribe/` GitHub Pages path.
+
+## Browser Notes
+
+- The first run downloads ffmpeg.wasm and the Whisper model into the browser cache.
+- Large videos can take time and use significant memory.
+- Performance depends on the user's browser, CPU, and available memory.
+- Everything runs locally in the browser; there is no server-side transcription.
