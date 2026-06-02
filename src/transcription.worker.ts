@@ -34,6 +34,7 @@ const OVERLAP_SECONDS = 5;
 const STEP_SECONDS = CHUNK_SECONDS - OVERLAP_SECONDS;
 const INPUT_NAME = 'input.mp4';
 const DEFAULT_MODEL_ID = 'Xenova/whisper-large-v3';
+const LARGE_MODEL_FALLBACK_ID = 'Xenova/whisper-small';
 const ALLOWED_MODEL_IDS = new Set([
   'Xenova/whisper-tiny',
   'Xenova/whisper-base',
@@ -109,7 +110,8 @@ self.addEventListener('message', async (event: MessageEvent<MainMessage>) => {
 
 const transcribeFile = async (file: File, duration: number, modelId: string, language: string) => {
   await ensureFFmpegLoaded();
-  const transcriber = await getTranscriber(modelId);
+  let activeModelId = modelId;
+  let transcriber = await getTranscriber(activeModelId);
 
   self.postMessage({ type: 'status', message: 'Writing MP4 into ffmpeg.wasm memory...' });
   await safeDelete(INPUT_NAME);
@@ -152,7 +154,22 @@ const transcribeFile = async (file: File, duration: number, modelId: string, lan
         message: `Transcribing chunk ${chunkIndex + 1} of ${chunkStarts.length}...`
       });
 
-      const result = await transcribeAudio(transcriber, audio, modelId, language);
+      let result: string;
+      try {
+        result = await transcribeAudio(transcriber, audio, activeModelId, language);
+      } catch (error) {
+        if (!canFallbackFromLargeModel(activeModelId, error)) {
+          throw error;
+        }
+
+        activeModelId = LARGE_MODEL_FALLBACK_ID;
+        self.postMessage({
+          type: 'status',
+          message: `Large Whisper failed in this browser session. Retrying with ${LARGE_MODEL_FALLBACK_ID}...`
+        });
+        transcriber = await getTranscriber(activeModelId);
+        result = await transcribeAudio(transcriber, audio, activeModelId, language);
+      }
       throwIfCanceled();
 
       self.postMessage({
@@ -362,6 +379,9 @@ const safeLanguage = (language: string) => (ALLOWED_LANGUAGES.has(language) ? la
 
 const browserCacheAvailable = () => typeof caches !== 'undefined';
 
+const canFallbackFromLargeModel = (modelId: string, error: unknown) =>
+  modelId === 'Xenova/whisper-large-v3' && /^\d+$/.test(rawErrorMessage(error));
+
 const buildTranscriptionOptions = (modelId: string, language: string) => {
   if (modelId.endsWith('.en')) return undefined;
 
@@ -377,7 +397,7 @@ const buildTranscriptionOptions = (modelId: string, language: string) => {
 };
 
 const errorMessage = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = rawErrorMessage(error);
 
   if (/^\d+$/.test(message)) {
     return [
@@ -388,4 +408,9 @@ const errorMessage = (error: unknown) => {
   }
 
   return message;
+};
+
+const rawErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  return String(error);
 };
