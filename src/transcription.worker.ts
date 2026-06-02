@@ -33,11 +33,12 @@ const CHUNK_SECONDS = 30;
 const OVERLAP_SECONDS = 5;
 const STEP_SECONDS = CHUNK_SECONDS - OVERLAP_SECONDS;
 const INPUT_NAME = 'input.mp4';
-const DEFAULT_MODEL_ID = 'Xenova/whisper-base';
+const DEFAULT_MODEL_ID = 'Xenova/whisper-large-v3';
 const ALLOWED_MODEL_IDS = new Set([
   'Xenova/whisper-tiny',
   'Xenova/whisper-base',
   'Xenova/whisper-small',
+  'Xenova/whisper-large-v3',
   'Xenova/whisper-tiny.en',
   'Xenova/whisper-base.en',
   'Xenova/whisper-small.en'
