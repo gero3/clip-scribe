@@ -377,6 +377,15 @@ const buildTranscriptionOptions = (modelId: string, language: string) => {
 };
 
 const errorMessage = (error: unknown) => {
-  if (error instanceof Error) return error.message;
-  return String(error);
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (/^\d+$/.test(message)) {
+    return [
+      `Runtime error ${message}.`,
+      'This usually means the selected Whisper model could not initialize in this browser session.',
+      'Try reloading, clearing browser storage for this site, or using a smaller model.'
+    ].join(' ');
+  }
+
+  return message;
 };
