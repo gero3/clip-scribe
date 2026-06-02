@@ -34,6 +34,10 @@ const OVERLAP_SECONDS = 5;
 const STEP_SECONDS = CHUNK_SECONDS - OVERLAP_SECONDS;
 const INPUT_NAME = 'input.mp4';
 const DEFAULT_MODEL_ID = 'Xenova/whisper-small';
+const LARGE_MODEL_IDS = new Set([
+  'Xenova/whisper-large-v3',
+  'onnx-community/whisper-large-v3-turbo'
+]);
 const LARGE_MODEL_FALLBACK_ID = 'Xenova/whisper-small';
 const LAST_RESORT_MODEL_ID = 'Xenova/whisper-base';
 const ALLOWED_MODEL_IDS = new Set([
@@ -41,6 +45,7 @@ const ALLOWED_MODEL_IDS = new Set([
   'Xenova/whisper-base',
   'Xenova/whisper-small',
   'Xenova/whisper-large-v3',
+  'onnx-community/whisper-large-v3-turbo',
   'Xenova/whisper-tiny.en',
   'Xenova/whisper-base.en',
   'Xenova/whisper-small.en'
@@ -112,7 +117,8 @@ self.addEventListener('message', async (event: MessageEvent<MainMessage>) => {
 const transcribeFile = async (file: File, duration: number, modelId: string, language: string) => {
   await ensureFFmpegLoaded();
   let activeModelId = modelId;
-  let transcriber = await getTranscriber(activeModelId);
+  let transcriber = await getTranscriberWithFallback(activeModelId);
+  activeModelId = transcriber.modelId;
 
   self.postMessage({ type: 'status', message: 'Writing MP4 into ffmpeg.wasm memory...' });
   await safeDelete(INPUT_NAME);
@@ -164,7 +170,7 @@ const transcribeFile = async (file: File, duration: number, modelId: string, lan
       const fallbackMessage =
         'Selected Whisper model failed in this browser session. Retrying with a smaller model...';
       const fallbackResult = await transcribeAudioWithFallback(
-        transcriber,
+        transcriber.pipeline,
         audio,
         activeModelId,
         language,
@@ -172,7 +178,10 @@ const transcribeFile = async (file: File, duration: number, modelId: string, lan
         fallbackMessage
       );
       activeModelId = fallbackResult.modelId;
-      transcriber = fallbackResult.transcriber;
+      transcriber = {
+        modelId: fallbackResult.modelId,
+        pipeline: fallbackResult.transcriber
+      };
       const result = fallbackResult.text;
       throwIfCanceled();
 
@@ -251,6 +260,29 @@ const getTranscriber = async (modelId: string) => {
   });
   transcriberCache.set(modelId, loadedTranscriber);
   return loadedTranscriber;
+};
+
+const getTranscriberWithFallback = async (modelId: string) => {
+  try {
+    return {
+      modelId,
+      pipeline: await getTranscriber(modelId)
+    };
+  } catch (error) {
+    if (!LARGE_MODEL_IDS.has(modelId)) {
+      throw error;
+    }
+
+    self.postMessage({
+      type: 'status',
+      message: `Large Whisper model could not load. Using ${LARGE_MODEL_FALLBACK_ID}.`
+    });
+
+    return {
+      modelId: LARGE_MODEL_FALLBACK_ID,
+      pipeline: await getTranscriber(LARGE_MODEL_FALLBACK_ID)
+    };
+  }
 };
 
 const buildChunkStarts = (duration: number) => {
