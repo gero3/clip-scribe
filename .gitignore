@@ -1,6 +1,8 @@
 node_modules/
 dist/
 public/ffmpeg-core/
+public/ffmpeg-wrapper/
+test-output/
 vite-dev.log
 .DS_Store
 *.local

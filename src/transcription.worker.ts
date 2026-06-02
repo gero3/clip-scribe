@@ -1,5 +1,5 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { env, pipeline } from '@huggingface/transformers';
 
 type StartMessage = {
@@ -16,7 +16,7 @@ type MainMessage = StartMessage | CancelMessage;
 
 type AutomaticSpeechRecognitionPipeline = (
   audio: Float32Array,
-  options: {
+  options?: {
     language: string;
     task: string;
   }
@@ -43,6 +43,10 @@ let canceled = false;
 let busy = false;
 
 env.allowLocalModels = false;
+(env.backends as { onnx?: { wasm?: { numThreads?: number; proxy?: boolean } } }).onnx ??= {};
+(env.backends as { onnx: { wasm?: { numThreads?: number; proxy?: boolean } } }).onnx.wasm ??= {};
+(env.backends as { onnx: { wasm: { numThreads?: number; proxy?: boolean } } }).onnx.wasm.numThreads = 1;
+(env.backends as { onnx: { wasm: { numThreads?: number; proxy?: boolean } } }).onnx.wasm.proxy = false;
 
 self.postMessage({ type: 'ready' });
 
@@ -144,10 +148,18 @@ const ensureFFmpegLoaded = async () => {
   self.postMessage({ type: 'status', message: 'Loading ffmpeg.wasm...' });
 
   const baseURL = new URL('../ffmpeg-core/', self.location.href).href;
+  const classWorkerURL = new URL('../ffmpeg-wrapper/worker.js', self.location.href).href;
+  self.postMessage({ type: 'status', message: 'Preparing ffmpeg core script...' });
+  const coreURL = await toBlobURL(`${baseURL}ffmpeg-core.js`, 'text/javascript');
+  self.postMessage({ type: 'status', message: 'Preparing ffmpeg core wasm...' });
+  const wasmURL = await toBlobURL(`${baseURL}ffmpeg-core.wasm`, 'application/wasm');
+  self.postMessage({ type: 'status', message: 'Starting ffmpeg worker...' });
   await ffmpeg.load({
-    coreURL: `${baseURL}ffmpeg-core.js`,
-    wasmURL: `${baseURL}ffmpeg-core.wasm`
+    classWorkerURL,
+    coreURL,
+    wasmURL
   });
+  self.postMessage({ type: 'status', message: 'ffmpeg.wasm loaded.' });
 
   ffmpegLoaded = true;
 };
@@ -209,10 +221,7 @@ const extractChunk = async (start: number, outputName: string) => {
 const transcribeAudio = async (audio: Float32Array) => {
   if (!transcriber) throw new Error('Whisper model is not loaded.');
 
-  const output = await transcriber(audio, {
-    language: 'english',
-    task: 'transcribe'
-  });
+  const output = await transcriber(audio);
 
   if (Array.isArray(output)) {
     return output.map((item) => ('text' in item ? String(item.text) : '')).join(' ').trim();

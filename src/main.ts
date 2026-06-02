@@ -101,24 +101,7 @@ videoInput.addEventListener('change', async () => {
   selectedDuration = 0;
   startButton.disabled = true;
 
-  if (!selectedFile) {
-    fileName.textContent = 'No file selected';
-    return;
-  }
-
-  fileName.textContent = `${selectedFile.name} (${formatBytes(selectedFile.size)})`;
-  setStatus('Reading video duration...');
-
-  try {
-    selectedDuration = await readVideoDuration(selectedFile);
-    startButton.disabled = isRunning;
-    setStatus(`Ready. Duration: ${formatTime(selectedDuration)}.`);
-  } catch (error) {
-    selectedFile = null;
-    videoInput.value = '';
-    fileName.textContent = 'No file selected';
-    setStatus(`Error: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  await prepareSelectedFile();
 });
 
 startButton.addEventListener('click', () => {
@@ -242,3 +225,50 @@ const readVideoDuration = (file: File) =>
     };
     video.src = url;
   });
+
+const prepareSelectedFile = async () => {
+  if (!selectedFile) {
+    fileName.textContent = 'No file selected';
+    return;
+  }
+
+  fileName.textContent = `${selectedFile.name} (${formatBytes(selectedFile.size)})`;
+  setStatus('Reading video duration...');
+
+  try {
+    selectedDuration = await readVideoDuration(selectedFile);
+    startButton.disabled = isRunning;
+    setStatus(`Ready. Duration: ${formatTime(selectedDuration)}.`);
+  } catch (error) {
+    selectedFile = null;
+    videoInput.value = '';
+    fileName.textContent = 'No file selected';
+    setStatus(`Error: ${error instanceof Error ? error.message : String(error)}`);
+  }
+};
+
+const loadLocalTestFile = async () => {
+  const params = new URLSearchParams(window.location.search);
+  const testFile = params.get('testFile');
+  const isLocalhost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+
+  if (!testFile || !isLocalhost) return;
+
+  setStatus('Loading local test MP4...');
+  const response = await fetch(testFile);
+  if (!response.ok) {
+    throw new Error(`Could not load local test file: ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  selectedFile = new File([blob], testFile.split('/').pop() || 'test.mp4', { type: 'video/mp4' });
+  await prepareSelectedFile();
+
+  if (params.get('autostart') === '1' && selectedFile) {
+    startButton.click();
+  }
+};
+
+void loadLocalTestFile().catch((error: unknown) => {
+  setStatus(`Error: ${error instanceof Error ? error.message : String(error)}`);
+});
