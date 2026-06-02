@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Browser MP4 Transcriber</title>
+  </head>
+  <body>
+    <main class="app">
+      <section class="header">
+        <p class="eyebrow">Client-side Whisper transcription</p>
+        <h1>Transcribe an MP4 in your browser</h1>
+        <p class="lede">
+          Upload a video and this page extracts overlapping 30-second audio chunks with ffmpeg.wasm,
+          then transcribes each chunk with Whisper without sending the file to a server.
+        </p>
+      </section>
+
+      <section class="panel" aria-labelledby="upload-title">
+        <h2 id="upload-title">Upload</h2>
+        <label class="file-picker">
+          <input id="video-input" type="file" accept="video/mp4" />
+          <span>Choose MP4 file</span>
+        </label>
+        <p id="file-name" class="muted">No file selected</p>
+
+        <div class="actions">
+          <button id="start-button" type="button" disabled>Start transcription</button>
+          <button id="cancel-button" type="button" disabled>Cancel</button>
+          <button id="copy-button" type="button" disabled>Copy transcript</button>
+          <button id="download-button" type="button" disabled>Download .txt</button>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="progress-title">
+        <h2 id="progress-title">Progress</h2>
+        <progress id="progress-bar" value="0" max="100"></progress>
+        <p id="status" class="muted">Waiting for an MP4 file.</p>
+      </section>
+
+      <section class="panel transcript-panel" aria-labelledby="transcript-title">
+        <h2 id="transcript-title">Transcript</h2>
+        <pre id="transcript" aria-live="polite"></pre>
+      </section>
+
+      <section class="setup" aria-labelledby="setup-title">
+        <h2 id="setup-title">Setup</h2>
+        <ol>
+          <li>Install dependencies with <code>npm install</code>.</li>
+          <li>Start the local app with <code>npm run dev</code>.</li>
+          <li>Open the Vite URL, usually <code>http://localhost:5173</code>.</li>
+          <li>Choose an MP4 and click <strong>Start transcription</strong>.</li>
+        </ol>
+        <p>
+          The first run downloads the ffmpeg.wasm core and the
+          <code>Xenova/whisper-tiny.en</code> model into the browser cache.
+        </p>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
