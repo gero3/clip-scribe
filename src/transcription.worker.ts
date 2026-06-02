@@ -58,12 +58,12 @@ const ALLOWED_LANGUAGES = new Set([
 
 const ffmpeg = new FFmpeg();
 let ffmpegLoaded = false;
-let transcriber: AutomaticSpeechRecognitionPipeline | null = null;
-let transcriberModelId = '';
+const transcriberCache = new Map<string, AutomaticSpeechRecognitionPipeline>();
 let canceled = false;
 let busy = false;
 
 env.allowLocalModels = false;
+env.useBrowserCache = true;
 (env.backends as { onnx?: { wasm?: { numThreads?: number; proxy?: boolean } } }).onnx ??= {};
 (env.backends as { onnx: { wasm?: { numThreads?: number; proxy?: boolean } } }).onnx.wasm ??= {};
 (env.backends as { onnx: { wasm: { numThreads?: number; proxy?: boolean } } }).onnx.wasm.numThreads = 1;
@@ -109,7 +109,7 @@ self.addEventListener('message', async (event: MessageEvent<MainMessage>) => {
 
 const transcribeFile = async (file: File, duration: number, modelId: string, language: string) => {
   await ensureFFmpegLoaded();
-  await ensureTranscriberLoaded(modelId);
+  const transcriber = await getTranscriber(modelId);
 
   self.postMessage({ type: 'status', message: 'Writing MP4 into ffmpeg.wasm memory...' });
   await safeDelete(INPUT_NAME);
@@ -152,7 +152,7 @@ const transcribeFile = async (file: File, duration: number, modelId: string, lan
         message: `Transcribing chunk ${chunkIndex + 1} of ${chunkStarts.length}...`
       });
 
-      const result = await transcribeAudio(audio, modelId, language);
+      const result = await transcribeAudio(transcriber, audio, modelId, language);
       throwIfCanceled();
 
       self.postMessage({
@@ -190,16 +190,29 @@ const ensureFFmpegLoaded = async () => {
   ffmpegLoaded = true;
 };
 
-const ensureTranscriberLoaded = async (modelId: string) => {
-  if (transcriber && transcriberModelId === modelId) return;
+const getTranscriber = async (modelId: string) => {
+  const cachedTranscriber = transcriberCache.get(modelId);
+  if (cachedTranscriber) {
+    self.postMessage({
+      type: 'status',
+      message: `Using cached Whisper model ${modelId}.`
+    });
+    return cachedTranscriber;
+  }
 
   self.postMessage({
     type: 'status',
     message: `Loading Whisper model ${modelId}...`
   });
+  self.postMessage({
+    type: 'status',
+    message: browserCacheAvailable()
+      ? 'Using browser storage for downloaded model files.'
+      : 'Browser model-file cache is not available in this environment.'
+  });
 
   const createPipeline = pipeline as unknown as CreatePipeline;
-  transcriber = await createPipeline('automatic-speech-recognition', modelId, {
+  const loadedTranscriber = await createPipeline('automatic-speech-recognition', modelId, {
     progress_callback: (progress: unknown) => {
       if (
         progress &&
@@ -215,7 +228,8 @@ const ensureTranscriberLoaded = async (modelId: string) => {
       }
     }
   });
-  transcriberModelId = modelId;
+  transcriberCache.set(modelId, loadedTranscriber);
+  return loadedTranscriber;
 };
 
 const buildChunkStarts = (duration: number) => {
@@ -245,9 +259,12 @@ const extractChunk = async (start: number, outputName: string) => {
   ]);
 };
 
-const transcribeAudio = async (audio: Float32Array, modelId: string, language: string) => {
-  if (!transcriber) throw new Error('Whisper model is not loaded.');
-
+const transcribeAudio = async (
+  transcriber: AutomaticSpeechRecognitionPipeline,
+  audio: Float32Array,
+  modelId: string,
+  language: string
+) => {
   const options = buildTranscriptionOptions(modelId, language);
   const output = await transcriber(audio, options);
 
@@ -342,6 +359,8 @@ const formatSeconds = (seconds: number) => `${seconds.toFixed(0)}s`;
 const safeModelId = (modelId: string) => (ALLOWED_MODEL_IDS.has(modelId) ? modelId : DEFAULT_MODEL_ID);
 
 const safeLanguage = (language: string) => (ALLOWED_LANGUAGES.has(language) ? language : 'auto');
+
+const browserCacheAvailable = () => typeof caches !== 'undefined';
 
 const buildTranscriptionOptions = (modelId: string, language: string) => {
   if (modelId.endsWith('.en')) return undefined;

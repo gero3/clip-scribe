@@ -92,6 +92,9 @@ The Vite config uses `base: './'`, so built assets work correctly from the `/cli
 ## Browser Notes
 
 - The first run downloads ffmpeg.wasm and the selected Whisper model into the browser cache.
+- Each Whisper model pipeline is loaded once per page session and reused for later transcriptions.
+- Downloaded model files use the browser Cache API when available, so reloads do not need to re-download the same files.
+- The selected model and language are saved in localStorage.
 - `large-v3` is the default for accuracy, but it is much heavier than `tiny`, `base`, or `small`.
 - Large videos can take time and use significant memory.
 - Performance depends on the user's browser, CPU, and available memory.

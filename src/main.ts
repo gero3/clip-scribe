@@ -78,6 +78,9 @@ const worker = new Worker(new URL('./transcription.worker.ts', import.meta.url),
   type: 'module'
 });
 
+const MODEL_STORAGE_KEY = 'clip-scribe:model';
+const LANGUAGE_STORAGE_KEY = 'clip-scribe:language';
+
 let selectedFile: File | null = null;
 let selectedDuration = 0;
 let transcript = '';
@@ -108,6 +111,14 @@ videoInput.addEventListener('change', async () => {
   startButton.disabled = true;
 
   await prepareSelectedFile();
+});
+
+modelSelect.addEventListener('change', () => {
+  saveSelectValue(MODEL_STORAGE_KEY, modelSelect.value);
+});
+
+languageSelect.addEventListener('change', () => {
+  saveSelectValue(LANGUAGE_STORAGE_KEY, languageSelect.value);
 });
 
 startButton.addEventListener('click', () => {
@@ -266,10 +277,12 @@ const loadLocalTestFile = async () => {
 
   if (testModel && Array.from(modelSelect.options).some((option) => option.value === testModel)) {
     modelSelect.value = testModel;
+    saveSelectValue(MODEL_STORAGE_KEY, testModel);
   }
 
   if (testLanguage && Array.from(languageSelect.options).some((option) => option.value === testLanguage)) {
     languageSelect.value = testLanguage;
+    saveSelectValue(LANGUAGE_STORAGE_KEY, testLanguage);
   }
 
   setStatus('Loading local test MP4...');
@@ -286,6 +299,22 @@ const loadLocalTestFile = async () => {
     startButton.click();
   }
 };
+
+const restoreSelectValue = (key: string, select: HTMLSelectElement) => {
+  const storedValue = localStorage.getItem(key);
+  if (!storedValue) return;
+
+  if (Array.from(select.options).some((option) => option.value === storedValue)) {
+    select.value = storedValue;
+  }
+};
+
+const saveSelectValue = (key: string, value: string) => {
+  localStorage.setItem(key, value);
+};
+
+restoreSelectValue(MODEL_STORAGE_KEY, modelSelect);
+restoreSelectValue(LANGUAGE_STORAGE_KEY, languageSelect);
 
 void loadLocalTestFile().catch((error: unknown) => {
   setStatus(`Error: ${error instanceof Error ? error.message : String(error)}`);
