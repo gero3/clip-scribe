@@ -1,5 +1,5 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import { fetchFile } from '@ffmpeg/util';
 import { env, pipeline } from '@huggingface/transformers';
 
 type StartMessage = {
@@ -143,10 +143,10 @@ const ensureFFmpegLoaded = async () => {
 
   self.postMessage({ type: 'status', message: 'Loading ffmpeg.wasm...' });
 
-  const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd';
+  const baseURL = new URL('../ffmpeg-core/', self.location.href).href;
   await ffmpeg.load({
-    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
+    coreURL: `${baseURL}ffmpeg-core.js`,
+    wasmURL: `${baseURL}ffmpeg-core.wasm`
   });
 
   ffmpegLoaded = true;

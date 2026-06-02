@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "copy:ffmpeg-core": "node scripts/copy-ffmpeg-core.mjs",
+    "predev": "npm run copy:ffmpeg-core",
     "dev": "vite",
+    "prebuild": "npm run copy:ffmpeg-core",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
