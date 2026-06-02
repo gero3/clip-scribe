@@ -35,6 +35,7 @@ const STEP_SECONDS = CHUNK_SECONDS - OVERLAP_SECONDS;
 const INPUT_NAME = 'input.mp4';
 const DEFAULT_MODEL_ID = 'Xenova/whisper-large-v3';
 const LARGE_MODEL_FALLBACK_ID = 'Xenova/whisper-small';
+const LAST_RESORT_MODEL_ID = 'Xenova/whisper-base';
 const ALLOWED_MODEL_IDS = new Set([
   'Xenova/whisper-tiny',
   'Xenova/whisper-base',
@@ -154,22 +155,20 @@ const transcribeFile = async (file: File, duration: number, modelId: string, lan
         message: `Transcribing chunk ${chunkIndex + 1} of ${chunkStarts.length}...`
       });
 
-      let result: string;
-      try {
-        result = await transcribeAudio(transcriber, audio, activeModelId, language);
-      } catch (error) {
-        if (!canFallbackFromLargeModel(activeModelId, error)) {
-          throw error;
-        }
-
-        activeModelId = LARGE_MODEL_FALLBACK_ID;
-        self.postMessage({
-          type: 'status',
-          message: `Large Whisper failed in this browser session. Retrying with ${LARGE_MODEL_FALLBACK_ID}...`
-        });
-        transcriber = await getTranscriber(activeModelId);
-        result = await transcribeAudio(transcriber, audio, activeModelId, language);
-      }
+      const fallbackModelIds = [LARGE_MODEL_FALLBACK_ID, LAST_RESORT_MODEL_ID];
+      const fallbackMessage =
+        'Selected Whisper model failed in this browser session. Retrying with a smaller model...';
+      const fallbackResult = await transcribeAudioWithFallback(
+        transcriber,
+        audio,
+        activeModelId,
+        language,
+        fallbackModelIds,
+        fallbackMessage
+      );
+      activeModelId = fallbackResult.modelId;
+      transcriber = fallbackResult.transcriber;
+      const result = fallbackResult.text;
       throwIfCanceled();
 
       self.postMessage({
@@ -296,6 +295,47 @@ const transcribeAudio = async (
   return String(output).trim();
 };
 
+const transcribeAudioWithFallback = async (
+  initialTranscriber: AutomaticSpeechRecognitionPipeline,
+  audio: Float32Array,
+  initialModelId: string,
+  language: string,
+  fallbackModelIds: string[],
+  fallbackMessage: string
+) => {
+  let modelId = initialModelId;
+  let transcriber = initialTranscriber;
+  const attemptedModelIds = new Set<string>();
+
+  for (;;) {
+    attemptedModelIds.add(modelId);
+
+    try {
+      return {
+        modelId,
+        text: await transcribeAudio(transcriber, audio, modelId, language),
+        transcriber
+      };
+    } catch (error) {
+      if (!isModelRuntimeError(error)) {
+        throw error;
+      }
+
+      const fallbackModelId = fallbackModelIds.find((candidate) => !attemptedModelIds.has(candidate));
+      if (!fallbackModelId) {
+        throw error;
+      }
+
+      modelId = fallbackModelId;
+      self.postMessage({
+        type: 'status',
+        message: `${fallbackMessage} Using ${modelId}.`
+      });
+      transcriber = await getTranscriber(modelId);
+    }
+  }
+};
+
 const decodeWavToFloat32 = (input: Uint8Array | string) => {
   if (typeof input === 'string') {
     throw new Error('Expected wav bytes but received a string from ffmpeg.');
@@ -379,8 +419,8 @@ const safeLanguage = (language: string) => (ALLOWED_LANGUAGES.has(language) ? la
 
 const browserCacheAvailable = () => typeof caches !== 'undefined';
 
-const canFallbackFromLargeModel = (modelId: string, error: unknown) =>
-  modelId === 'Xenova/whisper-large-v3' && /^\d+$/.test(rawErrorMessage(error));
+const isModelRuntimeError = (error: unknown) =>
+  /model execution/i.test(rawErrorMessage(error)) || /(?:^|["\s])\d{6,}(?:$|["\s.])/.test(rawErrorMessage(error));
 
 const buildTranscriptionOptions = (modelId: string, language: string) => {
   if (modelId.endsWith('.en')) return undefined;
